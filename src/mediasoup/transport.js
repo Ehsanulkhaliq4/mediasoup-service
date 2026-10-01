@@ -1,24 +1,27 @@
+import config from "../config/config.js";
+
+/**
+ * Creates a WebRTC Transport on the given router
+ * @param {import('mediasoup').types.Router} router
+ * @returns {Promise<import('mediasoup').types.WebRtcTransport>}
+ */
 export async function createWebRtcTransport(router) {
-    
+  const { webRtcTransport } = config.mediasoup;
 
-    const transport = await router.createWebRtcTransport({
-        listenInfos: [
-            {
-                protocol: "udp",
-                ip: "127.0.0.1",
-                announcedAddress: "127.0.0.1"
-            },{
-                protocol: "tcp",
-                ip: "127.0.0.1",
-                announcedAddress: "127.0.0.1"
-            }
-        ],
-        enableUdp: true,
-        enableTcp: true,
-        preferUdp: true
-    });
+  const transport = await router.createWebRtcTransport({
+    listenInfos: webRtcTransport.listenInfos,
+    initialAvailableOutgoingBitrate: webRtcTransport.initialAvailableOutgoingBitrate,
+    maxSctpMessageSize: webRtcTransport.maxSctpMessageSize,
+    enableUdp: webRtcTransport.enableUdp,
+    enableTcp: webRtcTransport.enableTcp,
+    preferUdp: webRtcTransport.preferUdp,
+  });
 
-    console.log("WebRTC Transport created successfully");
-    console.log("Transport ID:", transport.id);
-    return transport;
+  transport.on("dtlsstatechange", (dtlsState) => {
+    if (dtlsState === "closed") {
+      transport.close();
+    }
+  });
+
+  return transport;
 }

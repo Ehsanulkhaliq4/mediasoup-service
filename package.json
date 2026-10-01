@@ -2,8 +2,10 @@
   "name": "mediasoup-service",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "src/server.js",
   "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -11,8 +13,13 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.5",
+    "esbuild": "^0.28.2",
     "express": "^5.2.1",
     "mediasoup": "^3.27.1",
-    "mediasoup-client": "^3.24.1"
+    "mediasoup-client": "^3.24.1",
+    "socket.io": "^4.8.4",
+    "uuid": "^14.0.2"
   }
 }
