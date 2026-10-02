@@ -24,6 +24,7 @@ class WorkerPool {
         logTags: settings.logTags,
         rtcMinPort: settings.rtcMinPort,
         rtcMaxPort: settings.rtcMaxPort,
+        disableLiburing: true,
       });
 
       worker.on("died", () => {

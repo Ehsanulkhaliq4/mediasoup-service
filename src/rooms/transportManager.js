@@ -1,13 +1,7 @@
 import { createWebRtcTransport } from "../mediasoup/transport.js";
 
 class TransportManager {
-  /**
-   * Creates a WebRTC transport for a participant
-   * @param {object} room
-   * @param {string} participantId
-   * @param {'send' | 'recv'} direction
-   * @returns {Promise<import('mediasoup').types.WebRtcTransport>}
-   */
+
   async createTransport(room, participantId, direction) {
     const participant = room.participants.get(participantId);
     if (!participant) {
@@ -29,9 +23,6 @@ class TransportManager {
     return transport;
   }
 
-  /**
-   * Connects a WebRTC transport with client DTLS parameters
-   */
   async connectTransport(participant, transportId, dtlsParameters) {
     const transportData = participant.transports.get(transportId);
     if (!transportData) {
@@ -42,9 +33,6 @@ class TransportManager {
     return transportData.transport;
   }
 
-  /**
-   * Closes a transport for a participant
-   */
   closeTransport(participant, transportId) {
     const transportData = participant.transports.get(transportId);
     if (!transportData) {
@@ -57,9 +45,6 @@ class TransportManager {
     return true;
   }
 
-  /**
-   * Get transport stats
-   */
   async getTransportStats(participant, transportId) {
     const transportData = participant.transports.get(transportId);
     if (!transportData) {

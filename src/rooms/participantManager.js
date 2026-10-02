@@ -1,14 +1,7 @@
 class ParticipantManager {
-  /**
-   * Adds or registers a participant in a room
-   * @param {object} room
-   * @param {string} participantId
-   * @param {object} [metadata]
-   * @returns {object} participant
-   */
+
   addParticipant(room, participantId, metadata = {}) {
     if (room.participants.has(participantId)) {
-      // Reconnection: update metadata and return existing
       const existing = room.participants.get(participantId);
       if (metadata.displayName) existing.displayName = metadata.displayName;
       return existing;
@@ -22,9 +15,9 @@ class ParticipantManager {
       isMutedVideo: true,
       isScreenSharing: false,
       isHandRaised: false,
-      transports: new Map(), // transportId -> { id, type, transport }
-      producers: new Map(),  // producerId -> producer
-      consumers: new Map(),  // consumerId -> consumer
+      transports: new Map(), 
+      producers: new Map(),  
+      consumers: new Map(), 
     };
 
     room.participants.set(participantId, participant);
@@ -39,16 +32,12 @@ class ParticipantManager {
     return room.participants.has(participantId);
   }
 
-  /**
-   * Fully cleans up all resources of a participant upon leaving
-   */
   removeParticipant(room, participantId) {
     const participant = room.participants.get(participantId);
     if (!participant) {
       return false;
     }
 
-    // Close all consumers
     for (const consumer of participant.consumers.values()) {
       try {
         consumer.close();

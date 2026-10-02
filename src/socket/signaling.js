@@ -6,11 +6,7 @@ import producerManager from "../rooms/producerManager.js";
 import consumerManager from "../rooms/consumerManager.js";
 import { getMediasoupWorker } from "../mediasoup/worker.js";
 
-/**
- * Initializes the Socket.IO signaling server
- * @param {import('http').Server} httpServer
- * @param {object} corsConfig
- */
+
 export function initializeSignaling(httpServer, corsConfig) {
   const io = new Server(httpServer, {
     cors: corsConfig,

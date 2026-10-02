@@ -6,12 +6,6 @@ class RoomManager {
     this.rooms = new Map();
   }
 
-  /**
-   * Create a new meeting room
-   * @param {string} roomId
-   * @param {object} [metadata]
-   * @returns {Promise<object>}
-   */
   async createRoom(worker, roomId, metadata = {}) {
     if (!roomId) {
       throw new Error("roomId is required");
@@ -37,7 +31,6 @@ class RoomManager {
       activeSpeaker: null,
     };
 
-    // Active speaker detection
     audioLevelObserver.on("volumes", (volumes) => {
       const { producer, volume } = volumes[0];
       if (producer && !producer.closed) {
@@ -77,9 +70,6 @@ class RoomManager {
     return this.rooms.has(roomId);
   }
 
-  /**
-   * Closes and removes a room and its router
-   */
   deleteRoom(roomId) {
     const room = this.rooms.get(roomId);
     if (!room) {
@@ -111,9 +101,6 @@ class RoomManager {
     return true;
   }
 
-  /**
-   * Get all active rooms formatted for API responses
-   */
   getAllRooms() {
     const list = [];
     for (const room of this.rooms.values()) {
@@ -133,9 +120,6 @@ class RoomManager {
     return list;
   }
 
-  /**
-   * Get comprehensive stats for a specific room
-   */
   getRoomSummary(roomId) {
     const room = this.rooms.get(roomId);
     if (!room) return null;

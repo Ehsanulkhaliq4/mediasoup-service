@@ -1,10 +1,5 @@
 import config from "../config/config.js";
 
-/**
- * Creates a WebRTC Transport on the given router
- * @param {import('mediasoup').types.Router} router
- * @returns {Promise<import('mediasoup').types.WebRtcTransport>}
- */
 export async function createWebRtcTransport(router) {
   const { webRtcTransport } = config.mediasoup;
 

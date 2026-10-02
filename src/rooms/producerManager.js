@@ -1,14 +1,5 @@
 class ProducerManager {
-  /**
-   * Create a Producer on a participant's send transport
-   * @param {object} room
-   * @param {string} participantId
-   * @param {string} transportId
-   * @param {string} kind ('audio' | 'video')
-   * @param {object} rtpParameters
-   * @param {object} [appData] (e.g. { mediaType: 'camera' | 'mic' | 'screen' })
-   * @returns {Promise<import('mediasoup').types.Producer>}
-   */
+
   async createProducer(room, participantId, transportId, kind, rtpParameters, appData = {}) {
     const participant = room.participants.get(participantId);
     if (!participant) {
@@ -68,9 +59,6 @@ class ProducerManager {
     return producer;
   }
 
-  /**
-   * Pause a producer (e.g. mute mic or turn off camera)
-   */
   async pauseProducer(room, participant, producerId) {
     const producer = participant.producers.get(producerId);
     if (!producer) {
@@ -88,9 +76,6 @@ class ProducerManager {
     return producer;
   }
 
-  /**
-   * Resume a producer (e.g. unmute mic or turn on camera)
-   */
   async resumeProducer(room, participant, producerId) {
     const producer = participant.producers.get(producerId);
     if (!producer) {
@@ -108,9 +93,6 @@ class ProducerManager {
     return producer;
   }
 
-  /**
-   * Close a producer
-   */
   closeProducer(room, participant, producerId) {
     const producer = participant.producers.get(producerId);
     if (!producer) {

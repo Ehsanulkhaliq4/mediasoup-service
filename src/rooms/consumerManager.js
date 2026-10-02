@@ -1,13 +1,5 @@
 class ConsumerManager {
-  /**
-   * Create a Consumer for a participant from a specified producer
-   * @param {object} room
-   * @param {string} participantId
-   * @param {string} transportId
-   * @param {string} producerId
-   * @param {object} rtpCapabilities (client's device RTP capabilities)
-   * @returns {Promise<import('mediasoup').types.Consumer>}
-   */
+ 
   async createConsumer(room, participantId, transportId, producerId, rtpCapabilities) {
     const participant = room.participants.get(participantId);
     if (!participant) {
@@ -39,7 +31,6 @@ class ConsumerManager {
       throw new Error(`Producer not found: ${producerId}`);
     }
 
-    // Verify router and client can consume this producer
     const canConsume = room.router.canConsume({
       producerId: targetProducer.id,
       rtpCapabilities: rtpCapabilities || room.router.rtpCapabilities,
@@ -52,7 +43,7 @@ class ConsumerManager {
     const consumer = await transportData.transport.consume({
       producerId: targetProducer.id,
       rtpCapabilities: rtpCapabilities || room.router.rtpCapabilities,
-      paused: true, // start paused until client acknowledges creation
+      paused: true,
       appData: {
         producerId: targetProducer.id,
         producerParticipantId: producerParticipant?.id,
@@ -82,27 +73,19 @@ class ConsumerManager {
     return consumer;
   }
 
-  /**
-   * Resumes a paused consumer
-   */
   async resumeConsumer(participant, consumerId) {
     const consumer = this.getConsumer(participant, consumerId);
     await consumer.resume();
     return consumer;
   }
 
-  /**
-   * Pauses a consumer
-   */
+
   async pauseConsumer(participant, consumerId) {
     const consumer = this.getConsumer(participant, consumerId);
     await consumer.pause();
     return consumer;
   }
 
-  /**
-   * Close and delete consumer
-   */
   closeConsumer(participant, consumerId) {
     const consumer = participant.consumers.get(consumerId);
     if (!consumer) {

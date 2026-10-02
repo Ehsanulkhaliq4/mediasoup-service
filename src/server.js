@@ -79,7 +79,14 @@ async function startServer() {
   const PORT = config.server.port;
   const HOST = config.server.host;
 
-  server.listen(PORT, HOST, () => {});
+  server.listen(PORT, HOST, () => {
+    console.log(`Server listening on http://${HOST}:${PORT}`);
+  });
+  server.on("error", (err) => {
+    console.error("HTTP server failed to listen:", err.message);
+    workerPool.close();
+    process.exit(1);
+  });
 
   // Graceful shutdown
   const handleShutdown = () => {
@@ -93,7 +100,8 @@ async function startServer() {
   process.on("SIGTERM", handleShutdown);
 }
 
-startServer().catch(() => {
+startServer().catch((err) => {
+  console.error("Failed to start server:", err);
   process.exit(1);
 });
 
