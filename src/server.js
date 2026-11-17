@@ -19,6 +19,14 @@ import { createStatsRoutes } from "./routes/statsRoutes.js";
 
 import { initializeSignaling } from "./socket/signaling.js";
 
+// A single stray promise (for example a worker rejecting "Producer not found"
+// while media is being torn down) must never take down every active meeting.
+// Log it and keep the SFU running; individual handlers already report errors
+// back to the affected client.
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection (ignored):", reason);
+});
+
 async function startServer() {
   // --------------------------------------------------
   // 1. Initialize mediasoup Worker Pool

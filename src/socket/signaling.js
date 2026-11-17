@@ -405,7 +405,41 @@ export function initializeSignaling(httpServer, corsConfig) {
     });
 
     // ----------------------------------------------------
-    // 12. Leave Room / Disconnect
+    // 12. End Meeting (host only)
+    // ----------------------------------------------------
+    socket.on("end-meeting", ({ roomId, participantId }, callback) => {
+      try {
+        const room = roomManager.getRoom(roomId);
+        if (!room) {
+          return callback?.({ error: "Room not found", code: "ROOM_NOT_FOUND" });
+        }
+
+        if (room.hostParticipantId && room.hostParticipantId !== participantId) {
+          return callback?.({
+            error: "Only the meeting host can end the meeting.",
+            code: "NOT_HOST",
+          });
+        }
+
+        // Notify everyone except the host that initiated the action; the host
+        // resets its own UI as soon as the acknowledgement arrives.
+        socket.to(room.id).emit("meeting-ended", {
+          roomId: room.id,
+          reason: "host-ended",
+          endedBy: participantId,
+        });
+
+        roomManager.deleteRoom(room.id);
+        currentRoomId = null;
+        currentParticipantId = null;
+        callback?.({ success: true });
+      } catch (err) {
+        callback?.({ error: err.message });
+      }
+    });
+
+    // ----------------------------------------------------
+    // 13. Leave Room / Disconnect
     // ----------------------------------------------------
     const handleLeave = () => {
       const roomId = currentRoomId;
@@ -421,9 +455,23 @@ export function initializeSignaling(httpServer, corsConfig) {
 
       const participant = participantManager.getParticipant(room, participantId);
       const name = participant?.displayName || participantId;
+      const wasHost = room.hostParticipantId === participantId;
 
       // Clean up participant
       participantManager.removeParticipant(room, participantId);
+
+      // Promote the next participant so the room never keeps a stale host id.
+      if (wasHost) {
+        const nextHost = room.participants.values().next().value;
+        room.hostParticipantId = nextHost ? nextHost.id : null;
+        room.hostLocked = Boolean(nextHost);
+        if (nextHost) {
+          io.to(room.id).emit("host-changed", {
+            hostParticipantId: nextHost.id,
+            participantId: nextHost.id,
+          });
+        }
+      }
 
       // Notify remaining participants
       socket.to(roomId).emit("participant-left", {

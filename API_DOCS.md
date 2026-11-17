@@ -219,6 +219,7 @@ When building mobile apps or custom clients, connect to Socket.IO at `ws://<host
 | `producer-close` | `{ roomId, participantId, producerId }` | Stop track (e.g. stop screen sharing) |
 | `send-chat-message` | `{ roomId, participantId, displayName, text }` | Send group message to room |
 | `toggle-hand-raise` | `{ roomId, participantId, isHandRaised }` | Toggle hand raise indicator |
+| `end-meeting` | `{ roomId, participantId }` | Host only: close the room for every participant |
 | `leave-room` | None | Gracefully exit room and clean up resources |
 
 ### Server -> Client Broadcasts
@@ -234,3 +235,4 @@ When building mobile apps or custom clients, connect to Socket.IO at `ws://<host
 | `active-speaker` | `{ participantId, displayName, volume }` | Real-time dominant speaker detection |
 | `chat-message` | `{ id, participantId, displayName, text, timestamp }` | Incoming group chat message |
 | `hand-raised-updated` | `{ participantId, displayName, isHandRaised }` | Peer raised or lowered hand |
+| `meeting-ended` | `{ roomId, reason, endedBy }` | The host ended the meeting; the room has been closed |

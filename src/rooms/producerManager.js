@@ -100,9 +100,12 @@ class ProducerManager {
     }
 
     if (producer.kind === "audio" && room?.audioLevelObserver) {
-      try {
-        room.audioLevelObserver.removeProducer({ producerId: producer.id });
-      } catch (_) {}
+      // removeProducer() is async and rejects when the producer was already
+      // closed by the worker (e.g. during transport teardown). Swallow that
+      // rejection so it cannot crash the whole SFU process.
+      void Promise.resolve(
+        room.audioLevelObserver.removeProducer({ producerId: producer.id })
+      ).catch(() => {});
     }
 
     if (producer.appData?.mediaType === "screen") {
