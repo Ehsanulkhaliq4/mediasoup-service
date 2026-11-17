@@ -1,10 +1,12 @@
 import { Server } from "socket.io";
-import roomManager from "../rooms/roomManager.js";
+import roomManager, {
+  validateRoomId,
+  normalizeRoomId,
+} from "../rooms/roomManager.js";
 import participantManager from "../rooms/participantManager.js";
 import transportManager from "../rooms/transportManager.js";
 import producerManager from "../rooms/producerManager.js";
 import consumerManager from "../rooms/consumerManager.js";
-import { getMediasoupWorker } from "../mediasoup/worker.js";
 
 
 export function initializeSignaling(httpServer, corsConfig) {
@@ -21,36 +23,76 @@ export function initializeSignaling(httpServer, corsConfig) {
     // ----------------------------------------------------
     // 1. Join Room
     // ----------------------------------------------------
-    socket.on("join-room", async ({ roomId, participantId, displayName }, callback) => {
+    socket.on("join-room", async (payload, callback) => {
+      const respond = typeof callback === "function" ? callback : () => {};
+
       try {
-        if (!roomId || !participantId) {
-          return callback({ error: "roomId and participantId are required" });
+        const roomId = validateRoomId(payload?.roomId);
+        const participantId =
+          typeof payload?.participantId === "string"
+            ? payload.participantId.trim()
+            : "";
+        const displayName =
+          typeof payload?.displayName === "string"
+            ? payload.displayName.trim()
+            : "";
+
+        if (!participantId) {
+          return respond({
+            error: "participantId is required",
+            code: "PARTICIPANT_ID_REQUIRED",
+          });
         }
 
-        currentRoomId = roomId;
+        if (
+          currentRoomId &&
+          (currentRoomId !== roomId || currentParticipantId !== participantId)
+        ) {
+          handleLeave();
+        }
+
+        const room = roomManager.getRoom(roomId);
+        if (!room) {
+          return respond({
+            error: `Room '${roomId}' is not active. Create the meeting first or check the invite link.`,
+            code: "ROOM_NOT_FOUND",
+            roomId,
+          });
+        }
+
+        currentRoomId = room.id;
         currentParticipantId = participantId;
 
-        // Get or create room
-        let room = roomManager.getRoom(roomId);
-        if (!room) {
-          const worker = getMediasoupWorker();
-          room = await roomManager.createRoom(worker, roomId, { title: `Room ${roomId}` });
+        const requestedHost = payload?.isHost === true;
+        const previousHostId = room.hostParticipantId;
+        if (!room.hostParticipantId) {
+          room.hostParticipantId = participantId;
+          room.hostLocked = requestedHost;
+        } else if (requestedHost && !room.hostLocked) {
+          room.hostParticipantId = participantId;
+          room.hostLocked = true;
         }
+        const isHost = room.hostParticipantId === participantId;
 
-        // Register participant
         const participant = participantManager.addParticipant(room, participantId, {
           displayName: displayName || `User_${participantId.substring(0, 5)}`,
         });
+        if (previousHostId !== room.hostParticipantId) {
+          io.to(room.id).emit("host-changed", {
+            hostParticipantId: room.hostParticipantId,
+            participantId,
+          });
+        }
 
         // Attach active speaker hook if not already set
         if (!room.onActiveSpeaker) {
           room.onActiveSpeaker = (speakerData) => {
-            io.to(roomId).emit("active-speaker", speakerData);
+            io.to(room.id).emit("active-speaker", speakerData);
           };
         }
 
-        // Join socket room
-        socket.join(roomId);
+        // Join the Socket.IO room using the canonical room id.
+        socket.join(room.id);
 
         // Gather existing participants and their active producers
         const existingPeers = [];
@@ -66,6 +108,7 @@ export function initializeSignaling(httpServer, corsConfig) {
             existingPeers.push({
               participantId: p.id,
               displayName: p.displayName,
+              isHost: p.id === room.hostParticipantId,
               isMutedAudio: p.isMutedAudio,
               isMutedVideo: p.isMutedVideo,
               isScreenSharing: p.isScreenSharing,
@@ -76,19 +119,30 @@ export function initializeSignaling(httpServer, corsConfig) {
         }
 
         // Notify other participants in the room
-        socket.to(roomId).emit("participant-joined", {
+        socket.to(room.id).emit("participant-joined", {
           participantId: participant.id,
           displayName: participant.displayName,
+          isHost,
         });
 
-        callback({
+        respond({
           success: true,
+          roomId: room.id,
+          routerId: room.router.id,
           routerRtpCapabilities: room.router.rtpCapabilities,
+          participantId: participant.id,
+          isHost,
+          hostParticipantId: room.hostParticipantId,
+          createdAt: room.createdAt,
           peers: existingPeers,
           chatHistory: room.chatMessages.slice(-50),
         });
       } catch (err) {
-        callback({ error: err.message });
+        respond({
+          error: err.message,
+          code: err.code || "JOIN_FAILED",
+          roomId: normalizeRoomId(payload?.roomId),
+        });
       }
     });
 
@@ -168,7 +222,7 @@ export function initializeSignaling(httpServer, corsConfig) {
         );
 
         // Broadcast to all other peers in the room that a new producer is available
-        socket.to(roomId).emit("new-producer", {
+        socket.to(room.id).emit("new-producer", {
           producerId: producer.id,
           participantId,
           displayName: participant.displayName,
@@ -354,35 +408,38 @@ export function initializeSignaling(httpServer, corsConfig) {
     // 12. Leave Room / Disconnect
     // ----------------------------------------------------
     const handleLeave = () => {
-      if (!currentRoomId || !currentParticipantId) return;
-
-      const room = roomManager.getRoom(currentRoomId);
-      if (room) {
-        const participant = participantManager.getParticipant(room, currentParticipantId);
-        const name = participant?.displayName || currentParticipantId;
-
-        // Clean up participant
-        participantManager.removeParticipant(room, currentParticipantId);
-
-        // Notify remaining participants
-        socket.to(currentRoomId).emit("participant-left", {
-          participantId: currentParticipantId,
-          displayName: name,
-        });
-
-        // If room is empty, delete it after a grace period of 30 seconds
-        if (room.participants.size === 0) {
-          setTimeout(() => {
-            const r = roomManager.getRoom(currentRoomId);
-            if (r && r.participants.size === 0) {
-              roomManager.deleteRoom(currentRoomId);
-            }
-          }, 30000);
-        }
-      }
+      const roomId = currentRoomId;
+      const participantId = currentParticipantId;
+      if (!roomId || !participantId) return;
 
       currentRoomId = null;
       currentParticipantId = null;
+      socket.leave(roomId);
+
+      const room = roomManager.getRoom(roomId);
+      if (!room) return;
+
+      const participant = participantManager.getParticipant(room, participantId);
+      const name = participant?.displayName || participantId;
+
+      // Clean up participant
+      participantManager.removeParticipant(room, participantId);
+
+      // Notify remaining participants
+      socket.to(roomId).emit("participant-left", {
+        participantId,
+        displayName: name,
+      });
+
+      // If room is empty, delete it after a grace period of 30 seconds
+      if (room.participants.size === 0) {
+        setTimeout(() => {
+          const r = roomManager.getRoom(roomId);
+          if (r && r.participants.size === 0) {
+            roomManager.deleteRoom(roomId);
+          }
+        }, 30000);
+      }
     };
 
     socket.on("leave-room", handleLeave);

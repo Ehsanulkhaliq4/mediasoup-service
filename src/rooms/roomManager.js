@@ -1,18 +1,63 @@
 import { createRouter, createAudioObserver } from "../mediasoup/router.js";
 import { getMediasoupWorker } from "../mediasoup/worker.js";
 
+export const ROOM_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$/;
+
+export class InvalidRoomIdError extends Error {
+  constructor(roomId) {
+    super(
+      `Invalid roomId '${roomId}'. Use 3-64 URL-safe characters (letters, numbers, '-' or '_').`
+    );
+    this.name = "InvalidRoomIdError";
+    this.code = "INVALID_ROOM_ID";
+    this.roomId = roomId;
+    this.statusCode = 400;
+  }
+}
+
+export class RoomNotFoundError extends Error {
+  constructor(roomId) {
+    super(`Room '${roomId}' does not exist. Create the meeting first.`);
+    this.name = "RoomNotFoundError";
+    this.code = "ROOM_NOT_FOUND";
+    this.roomId = roomId;
+    this.statusCode = 404;
+  }
+}
+
+export function normalizeRoomId(roomId) {
+  return typeof roomId === "string" ? roomId.trim() : "";
+}
+
+export function validateRoomId(roomId) {
+  const normalized = normalizeRoomId(roomId);
+  if (!normalized) {
+    throw new InvalidRoomIdError(roomId);
+  }
+  if (!ROOM_ID_PATTERN.test(normalized)) {
+    throw new InvalidRoomIdError(normalized);
+  }
+  return normalized;
+}
+
+export function generateRoomId() {
+  const shortCode =
+    Math.random().toString(36).substring(2, 6) +
+    "-" +
+    Math.random().toString(36).substring(2, 6);
+  return `conf-${shortCode}`;
+}
+
 class RoomManager {
   constructor() {
     this.rooms = new Map();
   }
 
   async createRoom(worker, roomId, metadata = {}) {
-    if (!roomId) {
-      throw new Error("roomId is required");
-    }
+    const normalizedRoomId = validateRoomId(roomId);
 
-    if (this.rooms.has(roomId)) {
-      return this.rooms.get(roomId);
+    if (this.rooms.has(normalizedRoomId)) {
+      return this.rooms.get(normalizedRoomId);
     }
 
     const assignedWorker = worker || getMediasoupWorker();
@@ -20,8 +65,8 @@ class RoomManager {
     const audioLevelObserver = await createAudioObserver(router);
 
     const room = {
-      id: roomId,
-      title: metadata.title || `Room ${roomId}`,
+      id: normalizedRoomId,
+      title: metadata.title || `Room ${normalizedRoomId}`,
       createdAt: new Date(),
       worker: assignedWorker,
       router,
@@ -29,6 +74,8 @@ class RoomManager {
       participants: new Map(),
       chatMessages: [],
       activeSpeaker: null,
+      hostParticipantId: metadata.hostParticipantId || null,
+      hostLocked: Boolean(metadata.hostParticipantId),
     };
 
     audioLevelObserver.on("volumes", (volumes) => {
@@ -58,20 +105,30 @@ class RoomManager {
       }
     });
 
-    this.rooms.set(roomId, room);
+    this.rooms.set(normalizedRoomId, room);
     return room;
   }
 
   getRoom(roomId) {
-    return this.rooms.get(roomId);
+    const normalizedRoomId = normalizeRoomId(roomId);
+    return this.rooms.get(normalizedRoomId);
+  }
+  getRoomOrThrow(roomId) {
+    const normalizedRoomId = validateRoomId(roomId);
+    const room = this.rooms.get(normalizedRoomId);
+    if (!room) {
+      throw new RoomNotFoundError(normalizedRoomId);
+    }
+    return room;
   }
 
   hasRoom(roomId) {
-    return this.rooms.has(roomId);
+    return this.rooms.has(normalizeRoomId(roomId));
   }
 
   deleteRoom(roomId) {
-    const room = this.rooms.get(roomId);
+    const normalizedRoomId = normalizeRoomId(roomId);
+    const room = this.rooms.get(normalizedRoomId);
     if (!room) {
       return false;
     }
@@ -97,7 +154,7 @@ class RoomManager {
       } catch (_) {}
     }
 
-    this.rooms.delete(roomId);
+    this.rooms.delete(normalizedRoomId);
     return true;
   }
 
@@ -121,13 +178,14 @@ class RoomManager {
   }
 
   getRoomSummary(roomId) {
-    const room = this.rooms.get(roomId);
+    const room = this.rooms.get(normalizeRoomId(roomId));
     if (!room) return null;
 
     const participants = Array.from(room.participants.values()).map((p) => ({
       id: p.id,
       displayName: p.displayName,
       joinedAt: p.joinedAt,
+      isHost: p.id === room.hostParticipantId,
       isMutedAudio: p.isMutedAudio,
       isMutedVideo: p.isMutedVideo,
       isScreenSharing: p.isScreenSharing,
@@ -148,6 +206,7 @@ class RoomManager {
       totalParticipants: participants.length,
       participants,
       activeSpeaker: room.activeSpeaker,
+      hostParticipantId: room.hostParticipantId,
     };
   }
 }

@@ -30,6 +30,8 @@ export function createParticipantRoutes(roomManager, participantManager) {
         success: true,
         message: "Participant registered successfully",
         roomId: room.id,
+        routerId: room.router.id,
+        isHost: room.hostParticipantId === participant.id,
         participant: {
           id: participant.id,
           displayName: participant.displayName,
@@ -62,6 +64,7 @@ export function createParticipantRoutes(roomManager, participantManager) {
           id: participant.id,
           displayName: participant.displayName,
           joinedAt: participant.joinedAt,
+          isHost: participant.id === room.hostParticipantId,
           isMutedAudio: participant.isMutedAudio,
           isMutedVideo: participant.isMutedVideo,
           isScreenSharing: participant.isScreenSharing,
@@ -75,6 +78,7 @@ export function createParticipantRoutes(roomManager, participantManager) {
       return res.json({
         success: true,
         roomId: room.id,
+        hostParticipantId: room.hostParticipantId,
         totalParticipants: participants.length,
         participants,
       });

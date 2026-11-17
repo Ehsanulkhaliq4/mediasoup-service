@@ -1,27 +1,28 @@
 import express from "express";
-import { v4 as uuidv4 } from "uuid";
 import { getMediasoupWorker } from "../mediasoup/worker.js";
+import { generateRoomId, validateRoomId } from "../rooms/roomManager.js";
 
 export function createRoomRoutes(roomManager, workerPool) {
   const router = express.Router();
 
-  // POST /api/rooms - Create a new room
   router.post("/", async (req, res) => {
     try {
-      let { roomId, title } = req.body;
+      const requestedRoomId = req.body?.roomId;
+      const title = req.body?.title;
+      const roomId = requestedRoomId
+        ? validateRoomId(requestedRoomId)
+        : generateRoomId();
 
-      if (!roomId) {
-        // Generate a clean Zoom/Meet style meeting code: e.g. "meet-8f3a-2b1c"
-        const shortCode = Math.random().toString(36).substring(2, 6) + "-" + Math.random().toString(36).substring(2, 6);
-        roomId = `conf-${shortCode}`;
-      }
-
+      const alreadyExisted = roomManager.hasRoom(roomId);
       const worker = workerPool?.getNextWorker?.() || getMediasoupWorker();
       const room = await roomManager.createRoom(worker, roomId, { title });
 
-      return res.status(201).json({
+      return res.status(alreadyExisted ? 200 : 201).json({
         success: true,
-        message: "Room created successfully",
+        created: !alreadyExisted,
+        message: alreadyExisted
+          ? "Room already active; returning the existing Router"
+          : "Room created successfully",
         roomId: room.id,
         title: room.title,
         createdAt: room.createdAt,
@@ -29,9 +30,10 @@ export function createRoomRoutes(roomManager, workerPool) {
         routerRtpCapabilities: room.router.rtpCapabilities,
       });
     } catch (error) {
-      return res.status(500).json({
+      return res.status(error.statusCode || 500).json({
         success: false,
         error: error.message,
+        code: error.code || "ROOM_CREATE_FAILED",
       });
     }
   });
